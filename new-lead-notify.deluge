@@ -1,0 +1,49 @@
+// New CRM Lead -> Email + Task notification
+// Trigger: Workflow Rule on Leads - Created
+// Argument: String leadId = ${Leads.ID}
+
+void newLeadNotify(String leadId)
+{
+    lead = zoho.crm.getRecordById("Leads", leadId);
+    if(isNull(lead)) { return; }
+
+    leadName = lead.get("Last_Name");
+    leadEmail = lead.get("Email");
+    leadPhone = lead.get("Phone");
+    leadSource = lead.get("Lead_Source");
+
+    if(isNull(leadName)) { leadName = "Unknown"; }
+    if(isNull(leadEmail)) { leadEmail = "Not provided"; }
+    if(isNull(leadPhone)) { leadPhone = "Not provided"; }
+    if(isNull(leadSource)) { leadSource = "Unknown"; }
+
+    // Send notification email
+    subject = "New Lead: " + leadName + " via " + leadSource;
+    body = "A new lead has been submitted.\n\n"
+         + "Name: " + leadName + "\n"
+         + "Email: " + leadEmail + "\n"
+         + "Phone: " + leadPhone + "\n"
+         + "Source: " + leadSource + "\n\n"
+         + "Login to follow up: https://crm.zoho.com\n\n"
+         + "Rae of Sunshine Consulting";
+
+    sendmail
+    [
+        from: zoho.adminuserid
+        to: "info@raeofsunshineconsulting.co"
+        subject: subject
+        message: body
+    ]
+
+    // Create a follow-up task
+    taskMap = Map();
+    taskMap.put("Subject", "Follow up: " + leadName);
+    taskMap.put("Due_Date", zoho.currentdate.addDay(1).toString("yyyy-MM-dd"));
+    taskMap.put("Status", "Not Started");
+    taskMap.put("Priority", "High");
+    taskMap.put("What_Id", leadId);
+    taskMap.put("se_module", "Leads");
+    zoho.crm.createRecord("Tasks", taskMap);
+
+    info "SUCCESS: Notification sent for lead " + leadId;
+}

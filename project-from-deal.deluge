@@ -1,0 +1,44 @@
+// CRM Deal Active -> Zoho Project
+// Trigger: Workflow Rule on Deals - Stage changes to "Project Active"
+// Argument: String dealId = ${Deals.ID}
+// Required custom fields on Deals: Zoho_Project_ID (Text)
+
+void dealActiveCreateProject(String dealId)
+{
+    portalId = "raeofsunshineconsulting"; // REPLACE with client portal ID
+
+    deal = zoho.crm.getRecordById("Deals", dealId);
+    if(isNull(deal)) { return; }
+
+    dealName = deal.get("Deal_Name");
+    amount = deal.get("Amount");
+    if(isNull(dealName)) { dealName = "New Project"; }
+    if(isNull(amount)) { amount = 0; }
+
+    contactMap = deal.get("Contact_Name");
+    contactName = "";
+    if(!isNull(contactMap)) { contactName = contactMap.get("name"); }
+
+    closingDate = deal.get("Closing_Date");
+    endDate = zoho.currentdate.addDay(30).toString("yyyy-MM-dd");
+    if(!isNull(closingDate)) { endDate = closingDate.toString("yyyy-MM-dd"); }
+
+    projectMap = Map();
+    projectMap.put("name", dealName + " - " + contactName);
+    projectMap.put("description", "Project value: USD " + amount + " | CRM Deal: " + dealId);
+    projectMap.put("start_date", zoho.currentdate.toString("yyyy-MM-dd"));
+    projectMap.put("end_date", endDate);
+
+    response = zoho.projects.createProject(portalId, projectMap);
+    projectId = response.get("project").get("id").toString();
+
+    taskListMap = Map();
+    taskListMap.put("name", "Deliverables");
+    zoho.projects.createTaskList(portalId, projectId, taskListMap);
+
+    updateMap = Map();
+    updateMap.put("Zoho_Project_ID", projectId);
+    zoho.crm.updateRecord("Deals", dealId, updateMap);
+
+    info "SUCCESS: Project " + projectId + " created for deal " + dealId;
+}

@@ -1,0 +1,57 @@
+// CRM Deal Won -> Zoho Books Invoice
+// Trigger: Workflow Rule on Deals - Stage changes to "Closed Won"
+// Argument: String dealId = ${Deals.ID}
+// Required custom fields on Deals: Invoice_ID (Text), Invoice_Status (Text)
+
+void dealWonCreateInvoice(String dealId)
+{
+    orgId = "874099604"; // REPLACE with client Zoho Books org ID
+
+    deal = zoho.crm.getRecordById("Deals", dealId);
+    if(isNull(deal)) { info "ERROR: Deal not found"; return; }
+
+    contactMap = deal.get("Contact_Name");
+    if(isNull(contactMap)) { info "ERROR: No contact on deal"; return; }
+
+    contact = zoho.crm.getRecordById("Contacts", contactMap.get("id").toString());
+    customerName = "Client";
+    customerEmail = "";
+    if(!isNull(contact))
+    {
+        customerName = contact.get("Full_Name");
+        customerEmail = contact.get("Email");
+        if(isNull(customerName)) { customerName = "Client"; }
+        if(isNull(customerEmail)) { customerEmail = ""; }
+    }
+
+    dealName = deal.get("Deal_Name");
+    amount = deal.get("Amount");
+    if(isNull(dealName)) { dealName = "Services"; }
+    if(isNull(amount)) { amount = 0; }
+
+    invoiceMap = Map();
+    invoiceMap.put("customer_name", customerName);
+    if(customerEmail != "") { invoiceMap.put("customer_email", customerEmail); }
+    invoiceMap.put("date", zoho.currentdate.toString("yyyy-MM-dd"));
+    invoiceMap.put("due_date", zoho.currentdate.addDay(14).toString("yyyy-MM-dd"));
+    invoiceMap.put("reference_number", "CRM-" + dealId);
+    invoiceMap.put("notes", "Auto-generated from CRM Deal: " + dealName);
+
+    lineItem = Map();
+    lineItem.put("name", dealName);
+    lineItem.put("rate", amount);
+    lineItem.put("quantity", 1);
+    lineItems = List();
+    lineItems.add(lineItem);
+    invoiceMap.put("line_items", lineItems);
+
+    response = zoho.books.createRecord("invoices", orgId, invoiceMap);
+    invoiceId = response.get("invoice").get("invoice_id");
+
+    updateMap = Map();
+    updateMap.put("Invoice_ID", invoiceId.toString());
+    updateMap.put("Invoice_Status", "Draft");
+    zoho.crm.updateRecord("Deals", dealId, updateMap);
+
+    info "SUCCESS: Invoice " + invoiceId + " created for deal " + dealId;
+}
